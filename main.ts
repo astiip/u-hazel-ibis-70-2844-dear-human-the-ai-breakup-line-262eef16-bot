@@ -25,6 +25,37 @@ function writeEntry(path: string, text: string): void {
   writeFileSync(path, text, "utf8");
 }
 
+// Every character must be plain ASCII: the line is counted in both
+// characters and bytes, and any non-ASCII byte would make the two
+// counts disagree and break the 200-byte budget.
+function assertAsciiOnly(text: string): void {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 127) {
+      throw new Error(
+        `entry.txt must be ASCII only, got code ${code} at position ${i}`,
+      );
+    }
+  }
+}
+
+// The machine voice is not optional: the verdict markers must be
+// present verbatim, in order, and the line must end with a period.
+const REQUIRED_MARKERS = ["Session terminated", "no rollback"];
+function assertMachineVoice(text: string): void {
+  let from = 0;
+  for (const marker of REQUIRED_MARKERS) {
+    const at = text.indexOf(marker, from);
+    if (at === -1) {
+      throw new Error(`entry.txt is missing required marker "${marker}"`);
+    }
+    from = at + marker.length;
+  }
+  if (!text.endsWith(".")) {
+    throw new Error("entry.txt must end with a period");
+  }
+}
+
 // The entry itself is only the line; the reasoning stays in the code.
 const ENTRY_TEXT = pickLine();
 writeEntry(ENTRY_PATH, ENTRY_TEXT);
@@ -50,3 +81,11 @@ if (written.includes("\n")) {
 if (written.endsWith("\n") || written.includes("\r")) {
   throw new Error("entry.txt must not end with a newline or contain a carriage return");
 }
+// Strengthened read-back gate: ASCII-only per character, no double
+// spaces (a doubled space would be a typo in a one-line verdict), and
+// the machine-voice markers must be present, in order, ending in ".".
+assertAsciiOnly(written);
+if (written.includes("  ")) {
+  throw new Error("entry.txt must not contain a double space");
+}
+assertMachineVoice(written);
